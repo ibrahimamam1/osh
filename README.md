@@ -17,6 +17,7 @@ This project is a simple command-line shell in C that supports executing Linux c
 1. **Compile the Program:**
    ```bash
    gcc osh.c -o osh -lrt
+   
 2. **Run the Program:**
    ```bash
-  ./osh
+    ./osh
