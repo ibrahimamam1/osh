@@ -16,32 +16,9 @@ typedef struct{
   char entries[MAXHIST][MAXLINE];
 }History;
 
-int parse_input(char *str, char *dest[]) {
-  int token_count = 0;
-
-  int i = 0;
-  while (str[i]) {
-
-    // Skip multiple spaces
-    while (str[i] == ' ') {
-      i++;
-    }
-    if (!str[i])
-      break;
-
-    char current_token[MAXLINE] = {0};
-    size_t pos = 0;
-    while (str[i] && str[i] != ' ') {
-      current_token[pos++] = str[i++];
-    }
-    current_token[pos] = '\0';
-
-    dest[token_count] = malloc(pos + 2);
-    strcpy(dest[token_count++], current_token);
-  }
-
-  return token_count;
-}
+int parse_input(char *str, char *dest[]);
+void addtohistory(char *str, History* hist);
+void cleanup_resources(char **args, int arg_count);
 
 int main(void) {
   char *args[MAXLINE / 2 + 1]; /* command line arguments */
@@ -61,7 +38,7 @@ int main(void) {
     printf("\nosh>");
     fflush(stdout);
 
-    // read the user's input
+    // read command input
     char input[MAXLINE];
     fgets(input, MAXLINE, stdin);
     input[strcspn(input, "\n")] = 0; // remove the trailing new line character
@@ -75,7 +52,8 @@ int main(void) {
     
     //check osh_specific commands
     if (strcmp(args[0], "exit") == 0) {
-      exit(1);
+      should_run = 0;
+      continue;
     }
     if (strcmp(args[0], "!!") == 0) {
       //execute latest command in history
@@ -99,7 +77,7 @@ int main(void) {
       else{
         //clear arguments and parse last command in history
         memset(args, 0, arg_count * (MAXLINE / 2 + 1));
-        strcpy(input, hist->entries[hist->count-1]);
+        strcpy(input, hist->entries[hist->count-n]);
         arg_count = parse_input(input, args);
       }
     } 
@@ -127,7 +105,7 @@ int main(void) {
       int pid = fork();
       if (pid == 0) {
         // child process
-        strcpy(hist->entries[hist->count++], input); // add command to history
+        addtohistory(input, hist);
         execvp(args[0], args);
       } else {
         // parent process
@@ -135,6 +113,58 @@ int main(void) {
           wait(NULL);
         }
       }
+    cleanup_resources(args, arg_count);
     }
+  
+  //cleanup shared memory and release resource 
+  munmap(hist, MEMSIZE);
+  shm_unlink("history");
+
   return 0;
 }
+
+int parse_input(char *str, char *dest[]) {
+  int token_count = 0;
+
+  int i = 0;
+  while (str[i]) {
+
+    // Skip multiple spaces
+    while (str[i] == ' ') {
+      i++;
+    }
+    if (!str[i])
+      break;
+
+    char current_token[MAXLINE] = {0};
+    size_t pos = 0;
+    while (str[i] && str[i] != ' ') {
+      current_token[pos++] = str[i++];
+    }
+    current_token[pos] = '\0';
+
+    dest[token_count] = malloc(pos + 2);
+    strcpy(dest[token_count++], current_token);
+  }
+
+  return token_count;
+}
+
+void addtohistory(char *str, History *hist){
+
+  if(hist->count < MAXHIST)
+      strcpy(hist->entries[hist->count++], str); // add command to history
+  else{
+    for(int i=1; i<hist->count; i++){
+      strcpy(hist->entries[i-1], hist->entries[i]);
+    }
+    strcpy(hist->entries[hist->count-1],str);
+  }
+}
+
+void cleanup_resources(char **args, int arg_count) {
+    for (int i = 0; i < arg_count; i++) {
+        free(args[i]);
+        args[i] = NULL;
+    }
+} 
